@@ -595,8 +595,11 @@ bool parse_field(TigFile* stream, char* buffer)
                 current_mes_file_path);
         }
 
-        // Store character in buffer if there's space.
-        if (pos < MAX_STRING) {
+        // Store character in buffer if there's space. Reserve one byte for the
+        // NUL terminator written after the loop; otherwise an over-long field
+        // (e.g. in a localized mes file) writes `buffer[MAX_STRING]`, one past
+        // the end of the array, aborting via the stack protector.
+        if (pos < MAX_STRING - 1) {
             buffer[pos++] = (char)ch;
         } else {
             too_long = true;
