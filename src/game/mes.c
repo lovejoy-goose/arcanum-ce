@@ -661,7 +661,12 @@ int consume_next_char(TigFile* stream)
         }
     }
 
-    return mes_file_parse_buffer[mes_file_parse_pos++];
+    // FIX: Cast to `unsigned char` before the implicit promotion to `int`. On
+    // platforms where `char` is signed (Apple targets, including arm64), a byte
+    // 0xFF would otherwise become -1 and be mistaken for EOF, truncating the
+    // file mid-parse. 0xFF is 'я' in Windows-1251 and is common in localized
+    // text, which made every Cyrillic mes file fail to load.
+    return (unsigned char)mes_file_parse_buffer[mes_file_parse_pos++];
 }
 
 /**
