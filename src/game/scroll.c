@@ -13,7 +13,7 @@
 #define SCROLL_DIAG_X 4
 #define SCROLL_DIAG_Y 2
 
-static void scroll_by(int64_t dx, int64_t dy);
+
 static void scroll_origin_changed(int64_t loc);
 static void scroll_speed_changed(void);
 static bool scroll_cursor_art_set(tig_art_id_t art_id);

@@ -706,7 +706,19 @@ void main_loop(void)
         }
 
         if (intgame_mode_supports_scrolling(intgame_mode_get())) {
+#if SDL_PLATFORM_IOS || SDL_PLATFORM_ANDROID
+            // CE: Touch devices have no hovering cursor, edge scrolling would
+            // keep going after a tap near the edge. Use two-finger drag.
+            int pan_dx;
+            int pan_dy;
+
+            tig_message_take_pan(&pan_dx, &pan_dy);
+            if (pan_dx != 0 || pan_dy != 0) {
+                scroll_by(pan_dx, pan_dy);
+            }
+#else
             handle_mouse_scroll();
+#endif
         }
     }
 }

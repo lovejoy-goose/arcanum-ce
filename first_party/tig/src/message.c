@@ -47,6 +47,7 @@ static int tig_message_text_buffer_index;
 // - drag: left button held while moving (inventory drag & drop)
 // - long press: right click (held until finger is lifted)
 // - two-finger tap: right click
+// - two-finger drag: pan the map
 // - three-finger tap: Escape (game menu with save/load)
 // - four-finger tap: F7 (quick save)
 
@@ -63,6 +64,11 @@ static bool tig_message_touch_active;
 static SDL_FingerID tig_message_touch_finger;
 static int tig_message_touch_finger_count;
 static int tig_message_touch_max_finger_count;
+static bool tig_message_touch_panned;
+static float tig_message_touch_last_x;
+static float tig_message_touch_last_y;
+static float tig_message_touch_pan_x;
+static float tig_message_touch_pan_y;
 static bool tig_message_touch_dragging;
 static bool tig_message_touch_long_pressed;
 static bool tig_message_touch_consumed;
@@ -284,6 +290,9 @@ static void tig_message_touch_handle_event(const SDL_Event* event)
             tig_message_touch_active = true;
             tig_message_touch_finger = event->tfinger.fingerID;
             tig_message_touch_max_finger_count = 1;
+            tig_message_touch_panned = false;
+            tig_message_touch_last_x = event->tfinger.x;
+            tig_message_touch_last_y = event->tfinger.y;
             tig_message_touch_dragging = false;
             tig_message_touch_long_pressed = false;
             tig_message_touch_consumed = false;
@@ -307,6 +316,30 @@ static void tig_message_touch_handle_event(const SDL_Event* event)
         if (!tig_message_touch_active || event->tfinger.fingerID != tig_message_touch_finger) {
             break;
         }
+
+        // Two-finger drag pans the map following the primary finger.
+        if (tig_message_touch_consumed && tig_message_touch_finger_count == 2) {
+            dx = event->tfinger.x - tig_message_touch_last_x;
+            dy = event->tfinger.y - tig_message_touch_last_y;
+            tig_message_touch_last_x = event->tfinger.x;
+            tig_message_touch_last_y = event->tfinger.y;
+
+            if (!tig_message_touch_panned) {
+                dx = event->tfinger.x - tig_message_touch_down_x;
+                dy = event->tfinger.y - tig_message_touch_down_y;
+                if (dx * dx + dy * dy < TOUCH_DRAG_THRESHOLD * TOUCH_DRAG_THRESHOLD) {
+                    break;
+                }
+                tig_message_touch_panned = true;
+            }
+
+            tig_message_touch_pan_x += dx;
+            tig_message_touch_pan_y += dy;
+            break;
+        }
+
+        tig_message_touch_last_x = event->tfinger.x;
+        tig_message_touch_last_y = event->tfinger.y;
 
         if (!tig_message_touch_dragging
             && !tig_message_touch_long_pressed
@@ -356,7 +389,7 @@ static void tig_message_touch_handle_event(const SDL_Event* event)
         }
 
         // All fingers lifted.
-        if (tig_message_touch_consumed && event->type == SDL_EVENT_FINGER_UP) {
+        if (tig_message_touch_consumed && !tig_message_touch_panned && event->type == SDL_EVENT_FINGER_UP) {
             switch (tig_message_touch_max_finger_count) {
             case 2:
                 tig_mouse_set_button(TIG_MOUSE_BUTTON_RIGHT, true);
@@ -374,6 +407,16 @@ static void tig_message_touch_handle_event(const SDL_Event* event)
         tig_message_touch_active = false;
         break;
     }
+}
+
+void tig_message_take_pan(int* dx, int* dy)
+{
+    *dx = (int)tig_message_touch_pan_x;
+    *dy = (int)tig_message_touch_pan_y;
+
+    // Keep fractional remainder for smooth panning.
+    tig_message_touch_pan_x -= (float)*dx;
+    tig_message_touch_pan_y -= (float)*dy;
 }
 
 static void tig_message_touch_ping(void)
@@ -557,6 +600,14 @@ void tig_message_node_release(TigMessageListNode* node)
     node->next = tig_message_empty_node_head;
     tig_message_empty_node_head = node;
 }
+
+#if !(SDL_PLATFORM_IOS || SDL_PLATFORM_ANDROID)
+void tig_message_take_pan(int* dx, int* dy)
+{
+    *dx = 0;
+    *dy = 0;
+}
+#endif
 
 /**
  * Debug autopilot: when `ARCANUM_AUTOTEST` environment variable points to a

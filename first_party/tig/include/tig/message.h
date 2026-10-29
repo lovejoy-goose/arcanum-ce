@@ -90,6 +90,10 @@ int tig_message_dequeue(TigMessage* message);
 // returns `TIG_OK`.
 int tig_message_post_quit(int exit_code);
 
+// Returns accumulated touch panning (two-finger drag) in logical pixels since
+// the last call and resets it. Always zero on non-touch platforms.
+void tig_message_take_pan(int* dx, int* dy);
+
 #ifdef __cplusplus
 }
 #endif
