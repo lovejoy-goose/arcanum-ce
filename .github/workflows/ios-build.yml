@@ -1,0 +1,42 @@
+name: iOS build
+
+on:
+  push:
+    branches:
+      - touch-controls
+  workflow_dispatch:
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  ios:
+    name: iOS
+    runs-on: macos-14
+
+    steps:
+      - name: Clone
+        uses: actions/checkout@v5
+
+      - name: Cache
+        uses: actions/cache@v5
+        with:
+          path: out/build/ios
+          key: ios-cmake-v7
+
+      - name: Configure
+        run: cmake --preset ios
+
+      - name: Build
+        run: cmake --build --preset ios-debug
+
+      - name: Pack
+        run: cpack --config out/build/ios/CPackConfig.cmake -C Debug -B out/build/ios
+
+      - name: Upload
+        uses: actions/upload-artifact@v6
+        with:
+          name: arcanum-ce.ipa
+          path: out/build/ios/arcanum-ce.ipa
+          retention-days: 30
