@@ -4,6 +4,7 @@
 #include <stdlib.h>
 #else
 #include <dirent.h>
+#include <unistd.h>
 #endif
 
 void compat_windows_path_to_native(char* path)
@@ -254,5 +255,29 @@ void compat_makepath(char* path, const char* drive, const char* dir, const char*
     }
 
     *path = '\0';
+#endif
+}
+
+const char* compat_sdl_path(const char* path, char* buffer, size_t size)
+{
+#if SDL_PLATFORM_IOS
+    char cwd[TIG_MAX_PATH];
+
+    if (path[0] == '/' || getcwd(cwd, sizeof(cwd)) == NULL) {
+        return path;
+    }
+
+    if (path[0] == '.' && path[1] == '/') {
+        path += 2;
+    } else if (path[0] == '.' && path[1] == '\0') {
+        path++;
+    }
+
+    SDL_snprintf(buffer, size, "%s/%s", cwd, path);
+    return buffer;
+#else
+    (void)buffer;
+    (void)size;
+    return path;
 #endif
 }

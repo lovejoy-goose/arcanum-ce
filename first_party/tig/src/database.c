@@ -744,7 +744,7 @@ void tig_database_load_ignored(TigDatabase* database)
     strcpy(path, database->path);
     strcat(path, ".ignore");
 
-    if (!SDL_GetPathInfo(path, &path_info)) {
+    if (!SDL_GetPathInfo(COMPAT_SDL_PATH(path), &path_info)) {
         return;
     }
 

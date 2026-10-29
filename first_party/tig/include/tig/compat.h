@@ -22,6 +22,12 @@ extern "C" {
 
 void compat_windows_path_to_native(char* path);
 void compat_resolve_path(char* path);
+
+// CE: SDL filesystem functions on iOS resolve relative paths against the app's
+// preferences folder rather than the current directory. Returns `path` made
+// absolute (relative to the current directory) on iOS, `path` as is elsewhere.
+#define COMPAT_SDL_PATH(path) compat_sdl_path(path, (char[TIG_MAX_PATH]) { 0 }, TIG_MAX_PATH)
+const char* compat_sdl_path(const char* path, char* buffer, size_t size);
 void compat_append_path(char* path, size_t size, const char* comp);
 void compat_join_path_ex(char* path, size_t size, ...);
 #define compat_join_path(path, size, ...) compat_join_path_ex(path, size, __VA_ARGS__, NULL)

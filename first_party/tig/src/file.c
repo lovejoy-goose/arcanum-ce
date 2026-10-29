@@ -615,7 +615,7 @@ bool tig_file_repository_add_native(const char* path)
     // the resolved file name, only the provided `path`. This means that the
     // same repository can be added multiple times if the pattern given to this
     // function has several matches.
-    if (SDL_GetPathInfo(path, &path_info)) {
+    if (SDL_GetPathInfo(COMPAT_SDL_PATH(path), &path_info)) {
         if (path_info.type == SDL_PATHTYPE_DIRECTORY) {
             repo = (TigFileRepository*)MALLOC(sizeof(TigFileRepository));
             repo->type = 0;
@@ -774,7 +774,10 @@ int tig_file_mkdir_ex_native(const char* path)
         temp_path[temp_path_length] = '\0';
     }
 
-    if (!SDL_CreateDirectory(temp_path)) {
+    if (!SDL_CreateDirectory(COMPAT_SDL_PATH(temp_path))) {
+#if SDL_PLATFORM_IOS
+        tig_debug_printf("TIG File: mkdir(\"%s\") failed: %s\n", temp_path, SDL_GetError());
+#endif
         return -1;
     }
 
@@ -802,7 +805,7 @@ int tig_file_rmdir_ex_native(const char* path)
 
     compat_append_path(temp_path, sizeof(temp_path), path);
 
-    if (!SDL_RemovePath(temp_path)) {
+    if (!SDL_RemovePath(COMPAT_SDL_PATH(temp_path))) {
         return -1;
     }
 
@@ -1206,7 +1209,7 @@ int tig_file_remove_native(const char* file_name)
     TigDatabaseEntry* database_entry;
 
     if (file_name[0] == '.' || file_name[0] == '\\' || file_name[1] == ':' || file_name[0] == '/') {
-        return SDL_RemovePath(file_name) ? 0 : 1;
+        return SDL_RemovePath(COMPAT_SDL_PATH(file_name)) ? 0 : 1;
     }
 
     if ((tig_file_ignored(file_name) & 0x2) != 0) {
@@ -1218,7 +1221,7 @@ int tig_file_remove_native(const char* file_name)
         if ((repo->type & TIG_FILE_PLAIN) != 0) {
             compat_join_path(path, sizeof(path), repo->path, file_name);
 
-            if (SDL_RemovePath(path)) {
+            if (SDL_RemovePath(COMPAT_SDL_PATH(path))) {
                 repo = repo->next;
                 while (repo != NULL) {
                     if ((repo->type & TIG_FILE_DATABASE) != 0
@@ -1247,7 +1250,7 @@ int tig_file_rename_native(const char* old_file_name, const char* new_file_name)
     char new_path[TIG_MAX_PATH];
 
     if (old_file_name[0] == '.' || old_file_name[0] == '\\' || old_file_name[1] == ':' || old_file_name[0] == '/') {
-        return SDL_RenamePath(old_file_name, new_file_name) ? 0 : 1;
+        return SDL_RenamePath(COMPAT_SDL_PATH(old_file_name), COMPAT_SDL_PATH(new_file_name)) ? 0 : 1;
     }
 
     if ((tig_file_ignored(old_file_name) & 0x2) != 0) {
@@ -1260,7 +1263,7 @@ int tig_file_rename_native(const char* old_file_name, const char* new_file_name)
             compat_join_path(old_path, sizeof(old_path), repo->path, old_file_name);
             compat_join_path(new_path, sizeof(new_path), repo->path, new_file_name);
 
-            if (SDL_RenamePath(old_path, new_path)) {
+            if (SDL_RenamePath(COMPAT_SDL_PATH(old_path), COMPAT_SDL_PATH(new_path))) {
                 return 0;
             }
         }
@@ -1616,12 +1619,12 @@ bool tig_file_lock(const char* filename, const void* owner, size_t size)
 
     if (fwrite(owner, size, 1, stream) != 1) {
         fclose(stream);
-        SDL_RemovePath(path);
+        SDL_RemovePath(COMPAT_SDL_PATH(path));
         return false;
     }
 
     if (fclose(stream) != 0) {
-        SDL_RemovePath(path);
+        SDL_RemovePath(COMPAT_SDL_PATH(path));
         return false;
     }
 
@@ -1986,13 +1989,13 @@ int tig_file_rmdir_recursively_native(const char* path)
                     tig_file_rmdir_recursively_native(mutable_path);
                 }
             } else {
-                SDL_RemovePath(mutable_path);
+                SDL_RemovePath(COMPAT_SDL_PATH(mutable_path));
             }
         } while (tig_find_next_file(&ffd));
     }
     tig_find_close(&ffd);
 
-    if (!SDL_RemovePath(path)) {
+    if (!SDL_RemovePath(COMPAT_SDL_PATH(path))) {
         return -1;
     }
 

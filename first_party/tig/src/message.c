@@ -1,7 +1,11 @@
 #include "tig/message.h"
 
+#include <stdio.h>
+#include <string.h>
+
 #include "tig/button.h"
 #include "tig/core.h"
+#include "tig/debug.h"
 #include "tig/kb.h"
 #include "tig/memory.h"
 #include "tig/mouse.h"
@@ -27,6 +31,7 @@ static TigMessageListNode* tig_message_node_acquire(void);
 static void tig_message_node_reserve(void);
 static void tig_message_node_release(TigMessageListNode* node);
 static const char* tig_message_text_to_ansi(const char* utf8);
+static void tig_message_autotest_ping(void);
 
 // Number of converted text input strings kept alive at once (several text
 // input events can be queued in a single ping).
@@ -136,6 +141,8 @@ void tig_message_ping(void)
     message.type = TIG_MESSAGE_PING;
     message.timestamp = tig_ping_timestamp;
     tig_message_enqueue(&message);
+
+    tig_message_autotest_ping();
 
     for (index = 0; index < tig_message_key_handlers_count; index++) {
         if (tig_kb_is_key_pressed(tig_message_key_handlers[index].key)) {
@@ -549,4 +556,95 @@ void tig_message_node_release(TigMessageListNode* node)
 {
     node->next = tig_message_empty_node_head;
     tig_message_empty_node_head = node;
+}
+
+/**
+ * Debug autopilot: when `ARCANUM_AUTOTEST` environment variable points to a
+ * script file, executes one command per line:
+ *
+ *   wait <ms>        - pause before the next command
+ *   move <x> <y>     - move cursor (logical screen coordinates)
+ *   click <x> <y>    - left click
+ *   rclick <x> <y>   - right click
+ *   key <name>       - press and release a key (SDL scancode name, e.g. Escape)
+ *   text <string>    - text input
+ *   shot             - save screenshot (screenNNNN.bmp)
+ *   log <message>    - write message to the debug log
+ *   quit             - exit the game
+ */
+static void tig_message_autotest_ping(void)
+{
+    static bool initialized;
+    static FILE* stream;
+    static Uint64 next_ticks;
+    char line[256];
+    char arg[256];
+    int x;
+    int y;
+    size_t len;
+    SDL_Scancode scancode;
+    TigMessage message;
+    const char* path;
+
+    if (!initialized) {
+        initialized = true;
+        path = SDL_getenv("ARCANUM_AUTOTEST");
+        if (path != NULL) {
+            stream = fopen(path, "r");
+        }
+    }
+
+    if (stream == NULL || SDL_GetTicks() < next_ticks) {
+        return;
+    }
+
+    while (fgets(line, sizeof(line), stream) != NULL) {
+        len = strlen(line);
+        while (len > 0 && (line[len - 1] == '\n' || line[len - 1] == '\r')) {
+            line[--len] = '\0';
+        }
+
+        if (line[0] == '\0' || line[0] == '#') {
+            continue;
+        }
+
+        tig_debug_printf("AUTOTEST: %s\n", line);
+
+        if (sscanf(line, "wait %d", &x) == 1) {
+            next_ticks = SDL_GetTicks() + (Uint64)x;
+            return;
+        } else if (sscanf(line, "move %d %d", &x, &y) == 2) {
+            tig_mouse_set_position(x, y);
+        } else if (sscanf(line, "click %d %d", &x, &y) == 2) {
+            tig_mouse_set_position(x, y);
+            tig_mouse_set_button(TIG_MOUSE_BUTTON_LEFT, true);
+            tig_mouse_set_button(TIG_MOUSE_BUTTON_LEFT, false);
+        } else if (sscanf(line, "rclick %d %d", &x, &y) == 2) {
+            tig_mouse_set_position(x, y);
+            tig_mouse_set_button(TIG_MOUSE_BUTTON_RIGHT, true);
+            tig_mouse_set_button(TIG_MOUSE_BUTTON_RIGHT, false);
+        } else if (sscanf(line, "key %255s", arg) == 1) {
+            scancode = SDL_GetScancodeFromName(arg);
+            tig_kb_set_key(SDL_GetKeyFromScancode(scancode, SDL_KMOD_NONE, false), scancode, true);
+            tig_kb_set_key(SDL_GetKeyFromScancode(scancode, SDL_KMOD_NONE, false), scancode, false);
+        } else if (strncmp(line, "text ", 5) == 0) {
+            message.type = TIG_MESSAGE_TEXT_INPUT;
+            message.timestamp = tig_ping_timestamp;
+            message.data.text.text = tig_message_text_to_ansi(line + 5);
+            tig_message_enqueue(&message);
+        } else if (strcmp(line, "shot") == 0) {
+            tig_video_screenshot_make();
+        } else if (strncmp(line, "log ", 4) == 0) {
+            // Already logged above.
+        } else if (strcmp(line, "quit") == 0) {
+            tig_message_post_quit(0);
+        }
+
+        // Let the game process each input command before the next one.
+        next_ticks = SDL_GetTicks() + 50;
+        return;
+    }
+
+    fclose(stream);
+    stream = NULL;
 }

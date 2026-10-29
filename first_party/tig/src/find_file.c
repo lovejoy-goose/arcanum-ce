@@ -91,7 +91,7 @@ bool tig_find_next_file(TigFindFileData* find_file_data)
     }
 
     compat_join_path(path, sizeof(path), priv->dir, priv->entries[priv->index]);
-    if (!SDL_GetPathInfo(path, &(find_file_data->path_info))) {
+    if (!SDL_GetPathInfo(COMPAT_SDL_PATH(path), &(find_file_data->path_info))) {
         return false;
     }
 

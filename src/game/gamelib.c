@@ -1836,7 +1836,7 @@ void gamelib_load_data(void)
         tig_debug_printf("gamelib_load_data: arcanum*.dat not found by pattern, trying explicit names\n");
         for (index = 1; index <= 9; index++) {
             snprintf(name, sizeof(name), "arcanum%u.dat", index);
-            if (SDL_GetPathInfo(name, NULL)) {
+            if (SDL_GetPathInfo(COMPAT_SDL_PATH(name), NULL)) {
                 tig_file_repository_add(name);
             }
         }
