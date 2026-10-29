@@ -260,6 +260,12 @@ void settings_set_str_value(Settings* settings, const char* key, const char* val
             entry->value_changed_func();
         }
     }
+
+#if SDL_PLATFORM_IOS || SDL_PLATFORM_ANDROID
+    // CE: Mobile apps are usually terminated by the system without a clean
+    // exit, so settings would never reach the disk. Save them right away.
+    settings_save(settings);
+#endif
 }
 
 /**
