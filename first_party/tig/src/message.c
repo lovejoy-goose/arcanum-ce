@@ -291,6 +291,9 @@ static void tig_message_touch_handle_event(const SDL_Event* event)
             tig_message_touch_finger = event->tfinger.fingerID;
             tig_message_touch_max_finger_count = 1;
             tig_message_touch_panned = false;
+            // Drop panning left unconsumed by screens without a scrollable map.
+            tig_message_touch_pan_x = 0.0f;
+            tig_message_touch_pan_y = 0.0f;
             tig_message_touch_last_x = event->tfinger.x;
             tig_message_touch_last_y = event->tfinger.y;
             tig_message_touch_dragging = false;

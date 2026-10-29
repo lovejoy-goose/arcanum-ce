@@ -232,6 +232,7 @@ static void sub_563590(WmapCoords* a1, bool a2);
 static void wmap_ui_handle_scroll(void);
 static void wmap_ui_scroll_with_kb(int direction);
 static void wmap_ui_scroll_internal(int direction, int scale);
+static void wmap_ui_scroll_by(int dx, int dy);
 static void sub_563AC0(int x, int y, WmapCoords* coords);
 static void sub_563B10(int x, int y, WmapCoords* coords);
 static void sub_563C00(int x, int y, WmapCoords* coords);
@@ -2955,6 +2956,19 @@ void wmap_ui_handle_scroll(void)
     int vertical_direction = -69;
     bool scroll_horizontally = false;
 
+#if SDL_PLATFORM_IOS || SDL_PLATFORM_ANDROID
+    // CE: Two-finger drag pans the map, the view follows the fingers.
+    {
+        int pan_dx;
+        int pan_dy;
+
+        tig_message_take_pan(&pan_dx, &pan_dy);
+        if ((pan_dx != 0 || pan_dy != 0) && wmap_ui_state != WMAP_UI_STATE_MOVING) {
+            wmap_ui_scroll_by(-pan_dx, -pan_dy);
+        }
+    }
+#endif
+
     if (tig_timer_between(dword_66D9D0, gamelib_ping_time) >= 10) {
         dword_66D9D0 = gamelib_ping_time;
 
@@ -3038,19 +3052,13 @@ void wmap_ui_scroll(int direction)
 // 0x563790
 void wmap_ui_scroll_internal(int direction, int scale)
 {
-    WmapInfo* wmap_info;
     int sx;
     int sy;
     int dx;
     int dy;
-    int offset_x;
-    int offset_y;
-    TigRect rect;
 
     sx = scale * wmap_ui_scroll_speed_x;
     sy = scale * wmap_ui_scroll_speed_y;
-
-    wmap_info = &(wmap_ui_mode_info[wmap_ui_mode]);
 
     dx = 0;
     dy = 0;
@@ -3085,6 +3093,21 @@ void wmap_ui_scroll_internal(int direction, int scale)
         dy = -sy;
         break;
     }
+
+    wmap_ui_scroll_by(dx, dy);
+}
+
+/**
+ * Scrolls the map view by the specified offsets (clamped to map limits).
+ */
+void wmap_ui_scroll_by(int dx, int dy)
+{
+    WmapInfo* wmap_info;
+    int offset_x;
+    int offset_y;
+    TigRect rect;
+
+    wmap_info = &(wmap_ui_mode_info[wmap_ui_mode]);
 
     offset_x = wmap_info->field_34;
     offset_y = wmap_info->field_38;
