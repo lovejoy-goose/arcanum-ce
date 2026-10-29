@@ -27,6 +27,33 @@ static TigMessageListNode* tig_message_node_acquire(void);
 static void tig_message_node_reserve(void);
 static void tig_message_node_release(TigMessageListNode* node);
 
+#if SDL_PLATFORM_IOS || SDL_PLATFORM_ANDROID
+// Touch controls:
+// - tap: left click
+// - drag: left button held while moving (inventory drag & drop)
+// - long press: right click (held until finger is lifted)
+// - two-finger tap: right click
+
+// Hold duration (in milliseconds) that turns a touch into a right click.
+#define TOUCH_LONG_PRESS_MS 450
+
+// Distance (in logical pixels) a finger must travel to start a drag.
+#define TOUCH_DRAG_THRESHOLD 12.0f
+
+static void tig_message_touch_handle_event(const SDL_Event* event);
+static void tig_message_touch_ping(void);
+
+static bool tig_message_touch_active;
+static SDL_FingerID tig_message_touch_finger;
+static int tig_message_touch_finger_count;
+static bool tig_message_touch_dragging;
+static bool tig_message_touch_long_pressed;
+static bool tig_message_touch_consumed;
+static Uint64 tig_message_touch_down_ticks;
+static float tig_message_touch_down_x;
+static float tig_message_touch_down_y;
+#endif
+
 // 0x62B1A8
 static bool tig_message_key_triggers[MAX_KEY_HANDLERS];
 
@@ -51,6 +78,12 @@ int tig_message_init(TigInitInfo* init_info)
     (void)init_info;
 
     tig_message_mutex = SDL_CreateMutex();
+
+#if SDL_PLATFORM_IOS || SDL_PLATFORM_ANDROID
+    // Touches are translated into mouse input by
+    // `tig_message_touch_handle_event`, disable SDL's own emulation.
+    SDL_SetHint(SDL_HINT_TOUCH_MOUSE_EVENTS, "0");
+#endif
 
     tig_message_empty_node_head = NULL;
     tig_message_queue_head = NULL;
@@ -149,9 +182,116 @@ void tig_message_ping(void)
         case SDL_EVENT_QUIT:
             tig_message_post_quit(0);
             break;
+#if SDL_PLATFORM_IOS || SDL_PLATFORM_ANDROID
+        case SDL_EVENT_FINGER_DOWN:
+        case SDL_EVENT_FINGER_MOTION:
+        case SDL_EVENT_FINGER_UP:
+        case SDL_EVENT_FINGER_CANCELED:
+            tig_message_touch_handle_event(&event);
+            break;
+#endif
         }
     }
+
+#if SDL_PLATFORM_IOS || SDL_PLATFORM_ANDROID
+    tig_message_touch_ping();
+#endif
 }
+
+#if SDL_PLATFORM_IOS || SDL_PLATFORM_ANDROID
+static void tig_message_touch_handle_event(const SDL_Event* event)
+{
+    int x = (int)event->tfinger.x;
+    int y = (int)event->tfinger.y;
+    float dx;
+    float dy;
+
+    switch (event->type) {
+    case SDL_EVENT_FINGER_DOWN:
+        tig_message_touch_finger_count++;
+
+        if (!tig_message_touch_active) {
+            tig_message_touch_active = true;
+            tig_message_touch_finger = event->tfinger.fingerID;
+            tig_message_touch_dragging = false;
+            tig_message_touch_long_pressed = false;
+            tig_message_touch_consumed = false;
+            tig_message_touch_down_ticks = SDL_GetTicks();
+            tig_message_touch_down_x = event->tfinger.x;
+            tig_message_touch_down_y = event->tfinger.y;
+            tig_set_active(true);
+            tig_mouse_set_position(x, y);
+        } else if (!tig_message_touch_dragging
+            && !tig_message_touch_long_pressed
+            && !tig_message_touch_consumed) {
+            // Second finger while the first one is resting - right click at
+            // the first finger's position.
+            tig_mouse_set_button(TIG_MOUSE_BUTTON_RIGHT, true);
+            tig_mouse_set_button(TIG_MOUSE_BUTTON_RIGHT, false);
+            tig_message_touch_consumed = true;
+        }
+        break;
+    case SDL_EVENT_FINGER_MOTION:
+        if (!tig_message_touch_active || event->tfinger.fingerID != tig_message_touch_finger) {
+            break;
+        }
+
+        if (!tig_message_touch_dragging
+            && !tig_message_touch_long_pressed
+            && !tig_message_touch_consumed) {
+            dx = event->tfinger.x - tig_message_touch_down_x;
+            dy = event->tfinger.y - tig_message_touch_down_y;
+            if (dx * dx + dy * dy < TOUCH_DRAG_THRESHOLD * TOUCH_DRAG_THRESHOLD) {
+                break;
+            }
+
+            // Press at the original location so that drag starts from the
+            // touched object.
+            tig_message_touch_dragging = true;
+            tig_mouse_set_button(TIG_MOUSE_BUTTON_LEFT, true);
+        }
+
+        tig_mouse_set_position(x, y);
+        break;
+    case SDL_EVENT_FINGER_UP:
+    case SDL_EVENT_FINGER_CANCELED:
+        if (tig_message_touch_finger_count > 0) {
+            tig_message_touch_finger_count--;
+        }
+
+        if (!tig_message_touch_active || event->tfinger.fingerID != tig_message_touch_finger) {
+            break;
+        }
+
+        if (tig_message_touch_dragging) {
+            tig_mouse_set_button(TIG_MOUSE_BUTTON_LEFT, false);
+        } else if (tig_message_touch_long_pressed) {
+            tig_mouse_set_button(TIG_MOUSE_BUTTON_RIGHT, false);
+        } else if (!tig_message_touch_consumed && event->type == SDL_EVENT_FINGER_UP) {
+            tig_mouse_set_button(TIG_MOUSE_BUTTON_LEFT, true);
+            tig_mouse_set_button(TIG_MOUSE_BUTTON_LEFT, false);
+        }
+
+        tig_message_touch_active = false;
+        break;
+    }
+}
+
+static void tig_message_touch_ping(void)
+{
+    if (!tig_message_touch_active
+        || tig_message_touch_dragging
+        || tig_message_touch_long_pressed
+        || tig_message_touch_consumed) {
+        return;
+    }
+
+    if (SDL_GetTicks() - tig_message_touch_down_ticks >= TOUCH_LONG_PRESS_MS) {
+        tig_message_touch_long_pressed = true;
+        tig_mouse_set_button(TIG_MOUSE_BUTTON_RIGHT, true);
+    }
+}
+#endif
 
 // 0x52B890
 int tig_message_enqueue(TigMessage* message)
