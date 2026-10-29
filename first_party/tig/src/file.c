@@ -1,5 +1,8 @@
 #include "tig/file.h"
 
+#include <errno.h>
+#include <string.h>
+
 #include <limits.h>
 #include <stdarg.h>
 #include <stdio.h>
@@ -1794,6 +1797,11 @@ int tig_file_open_internal_native(const char* path, const char* mode, TigFile* s
                         stream->flags |= TIG_FILE_PLAIN;
                         break;
                     }
+#if SDL_PLATFORM_IOS
+                    if (mode[0] == 'w' || mode[0] == 'a') {
+                        tig_debug_printf("TIG File: fopen(\"%s\", \"%s\") failed: %s\n", mutable_path, mode, strerror(errno));
+                    }
+#endif
                 }
                 repo = repo->next;
             }
