@@ -103,7 +103,7 @@ bool tig_find_next_file(TigFindFileData* find_file_data)
         struct stat st;
 
         compat_join_path(path, sizeof(path), priv->dir, priv->entries[priv->index]);
-        if (stat(path, &st) == 0) {
+        if (stat(COMPAT_OS_PATH(path), &st) == 0) {
             find_file_data->path_info.type = S_ISDIR(st.st_mode)
                 ? SDL_PATHTYPE_DIRECTORY
                 : (S_ISREG(st.st_mode) ? SDL_PATHTYPE_FILE : SDL_PATHTYPE_OTHER);
@@ -172,13 +172,14 @@ static char** tig_find_file_glob(const char* dir, const char* pattern, int* coun
 {
     DIR* handle;
     struct dirent* entry;
+    char name[TIG_MAX_PATH];
     char** entries = NULL;
     char** tmp;
     int capacity = 0;
 
     *count = 0;
 
-    handle = opendir(dir);
+    handle = opendir(COMPAT_OS_PATH(dir));
     if (handle == NULL) {
         return NULL;
     }
@@ -188,7 +189,9 @@ static char** tig_find_file_glob(const char* dir, const char* pattern, int* coun
             continue;
         }
 
-        if (!fpattern_matchn(pattern, entry->d_name)) {
+        compat_os_name_to_game(entry->d_name, name, sizeof(name));
+
+        if (!fpattern_matchn(pattern, name)) {
             continue;
         }
 
@@ -201,7 +204,7 @@ static char** tig_find_file_glob(const char* dir, const char* pattern, int* coun
             entries = tmp;
         }
 
-        entries[*count] = SDL_strdup(entry->d_name);
+        entries[*count] = SDL_strdup(name);
         (*count)++;
     }
 
