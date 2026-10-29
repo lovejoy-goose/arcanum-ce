@@ -191,7 +191,7 @@ static char** tig_find_file_glob(const char* dir, const char* pattern, int* coun
 
         compat_os_name_to_game(entry->d_name, name, sizeof(name));
 
-        if (!fpattern_matchn(pattern, name)) {
+        if (!compat_fpattern_matchn(pattern, name)) {
             continue;
         }
 

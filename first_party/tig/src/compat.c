@@ -1,5 +1,7 @@
 #include "tig/compat.h"
 
+#include <fpattern/fpattern.h>
+
 #ifdef _WIN32
 #include <stdlib.h>
 #else
@@ -429,4 +431,32 @@ void compat_os_name_to_game(const char* name, char* buffer, size_t size)
 #endif
 
     SDL_strlcpy(buffer, name, size);
+}
+
+static void compat_to_lower(char* str)
+{
+    unsigned char* pch;
+
+    for (pch = (unsigned char*)str; *pch != '\0'; pch++) {
+        if (*pch >= 'A' && *pch <= 'Z') {
+            *pch += 'a' - 'A';
+        } else if (*pch >= 0xC0 && *pch <= 0xDF) {
+            *pch += 0x20;
+        } else if (*pch == 0xA8) {
+            *pch = 0xB8;
+        }
+    }
+}
+
+bool compat_fpattern_matchn(const char* pattern, const char* name)
+{
+    char lower_pattern[TIG_MAX_PATH];
+    char lower_name[TIG_MAX_PATH];
+
+    SDL_strlcpy(lower_pattern, pattern, sizeof(lower_pattern));
+    SDL_strlcpy(lower_name, name, sizeof(lower_name));
+    compat_to_lower(lower_pattern);
+    compat_to_lower(lower_name);
+
+    return fpattern_matchn(lower_pattern, lower_name) != 0;
 }

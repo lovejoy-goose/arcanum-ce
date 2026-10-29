@@ -1896,7 +1896,7 @@ unsigned int tig_file_ignored(const char* path)
 
     off_62B2A8 = tig_file_ignore_head;
     while (off_62B2A8 != NULL) {
-        if (fpattern_matchn(off_62B2A8->path, path)) {
+        if (compat_fpattern_matchn(off_62B2A8->path, path)) {
             return off_62B2A8->flags;
         }
         off_62B2A8 = off_62B2A8->next;

@@ -38,6 +38,10 @@ const char* compat_os_path(const char* path, char* buffer, size_t size);
 // Converts UTF-8 file name read from the file system back into Windows-1251 if
 // it consists of ASCII and Cyrillic characters only, otherwise copies it as is.
 void compat_os_name_to_game(const char* name, char* buffer, size_t size);
+
+// Case-insensitive `fpattern_matchn` (the library matches case-sensitively
+// outside of Windows). Handles ASCII and Windows-1251 Cyrillic letters.
+bool compat_fpattern_matchn(const char* pattern, const char* name);
 void compat_append_path(char* path, size_t size, const char* comp);
 void compat_join_path_ex(char* path, size_t size, ...);
 #define compat_join_path(path, size, ...) compat_join_path_ex(path, size, __VA_ARGS__, NULL)

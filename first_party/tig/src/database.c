@@ -320,7 +320,7 @@ bool tig_database_find_next_entry(TigDatabaseFindFileData* ffd)
     }
 
     while (index < ffd->database->entries_count) {
-        if (fpattern_matchn(ffd->pattern, ffd->database->entries[index].path)
+        if (compat_fpattern_matchn(ffd->pattern, ffd->database->entries[index].path)
             && num_path_segments(ffd->database->entries[index].path) == ffd->path_segments_count
             && (ffd->database->entries[index].flags & TIG_DATABASE_ENTRY_IGNORED) == 0) {
             // Found.
@@ -766,7 +766,7 @@ void tig_database_load_ignored(TigDatabase* database)
             file_name_segments_count = num_path_segments(file_name);
 
             for (index = 0; index < database->entries_count; index++) {
-                if (fpattern_matchn(file_name, database->entries[index].path)
+                if (compat_fpattern_matchn(file_name, database->entries[index].path)
                     && num_path_segments(database->entries[index].path) == file_name_segments_count) {
                     database->entries[index].flags |= TIG_DATABASE_ENTRY_IGNORED;
                 }
