@@ -26,6 +26,15 @@ typedef struct TigMessageKeyboardHandler {
 static TigMessageListNode* tig_message_node_acquire(void);
 static void tig_message_node_reserve(void);
 static void tig_message_node_release(TigMessageListNode* node);
+static const char* tig_message_text_to_ansi(const char* utf8);
+
+// Number of converted text input strings kept alive at once (several text
+// input events can be queued in a single ping).
+#define TEXT_INPUT_BUFFERS 8
+#define TEXT_INPUT_BUFFER_SIZE 64
+
+static char tig_message_text_buffers[TEXT_INPUT_BUFFERS][TEXT_INPUT_BUFFER_SIZE];
+static int tig_message_text_buffer_index;
 
 #if SDL_PLATFORM_IOS || SDL_PLATFORM_ANDROID
 // Touch controls:
@@ -176,7 +185,7 @@ void tig_message_ping(void)
             break;
         case SDL_EVENT_TEXT_INPUT:
             message.type = TIG_MESSAGE_TEXT_INPUT;
-            message.data.text.text = event.text.text;
+            message.data.text.text = tig_message_text_to_ansi(event.text.text);
             tig_message_enqueue(&message);
             break;
         case SDL_EVENT_QUIT:
@@ -196,6 +205,51 @@ void tig_message_ping(void)
 #if SDL_PLATFORM_IOS || SDL_PLATFORM_ANDROID
     tig_message_touch_ping();
 #endif
+}
+
+/**
+ * Converts UTF-8 text input into the game's single-byte encoding.
+ *
+ * Game fonts use Windows code pages: Cyrillic is mapped to Windows-1251
+ * (Russian localizations), U+0080-U+00FF are passed as is (Windows-1252
+ * compatible for Western languages). Other characters are dropped.
+ */
+static const char* tig_message_text_to_ansi(const char* utf8)
+{
+    char* buffer;
+    size_t len = 0;
+    size_t remaining;
+    Uint32 cp;
+
+    buffer = tig_message_text_buffers[tig_message_text_buffer_index];
+    tig_message_text_buffer_index = (tig_message_text_buffer_index + 1) % TEXT_INPUT_BUFFERS;
+
+    remaining = SDL_strlen(utf8);
+    while (remaining > 0 && len < TEXT_INPUT_BUFFER_SIZE - 1) {
+        cp = SDL_StepUTF8(&utf8, &remaining);
+        if (cp == 0) {
+            break;
+        }
+
+        if (cp < 0x80) {
+            buffer[len++] = (char)cp;
+        } else if (cp >= 0x410 && cp <= 0x44F) {
+            // А-я
+            buffer[len++] = (char)(cp - 0x410 + 0xC0);
+        } else if (cp == 0x401) {
+            // Ё
+            buffer[len++] = (char)0xA8;
+        } else if (cp == 0x451) {
+            // ё
+            buffer[len++] = (char)0xB8;
+        } else if (cp >= 0xA0 && cp <= 0xFF) {
+            buffer[len++] = (char)cp;
+        }
+    }
+
+    buffer[len] = '\0';
+
+    return buffer;
 }
 
 #if SDL_PLATFORM_IOS || SDL_PLATFORM_ANDROID
