@@ -56,6 +56,14 @@ static void handle_mouse_scroll(void);
 static void handle_keyboard_scroll(void);
 static void build_cmd_line(char* dst, size_t size, int argc, char** argv);
 
+#if SDL_PLATFORM_IOS
+static void log_to_file(void* userdata, int category, SDL_LogPriority priority, const char* message);
+
+static FILE* log_file;
+static SDL_LogOutputFunction log_default_output;
+static void* log_default_userdata;
+#endif
+
 // 0x59A040
 static float gamma = 1.0f;
 
@@ -79,6 +87,14 @@ int main(int argc, char** argv)
     chdir(SDL_GetBasePath());
 #elif SDL_PLATFORM_IOS
     chdir(SDL_GetUserFolder(SDL_FOLDER_DOCUMENTS));
+
+    // iOS hides app log messages in the system log (`<private>`), mirror them
+    // to a file visible via Files/Finder file sharing.
+    log_file = fopen("arcanum-ce.log", "w");
+    if (log_file != NULL) {
+        SDL_GetLogOutputFunction(&log_default_output, &log_default_userdata);
+        SDL_SetLogOutputFunction(log_to_file, NULL);
+    }
 #elif SDL_PLATFORM_ANDROID
     chdir(SDL_GetPrefPath("com.alexbatalov", "arcanumce"));
 #endif
@@ -786,3 +802,17 @@ void build_cmd_line(char* dst, size_t size, int argc, char** argv)
 
     *dst = '\0';
 }
+
+#if SDL_PLATFORM_IOS
+static void log_to_file(void* userdata, int category, SDL_LogPriority priority, const char* message)
+{
+    (void)userdata;
+
+    fprintf(log_file, "%s\n", message);
+    fflush(log_file);
+
+    if (log_default_output != NULL) {
+        log_default_output(log_default_userdata, category, priority, message);
+    }
+}
+#endif
