@@ -594,7 +594,14 @@ static void tig_message_autotest_ping(void)
         }
     }
 
-    if (stream == NULL || SDL_GetTicks() < next_ticks) {
+    if (stream == NULL) {
+        return;
+    }
+
+    // The game pauses when its window is not focused, keep it running.
+    tig_set_active(true);
+
+    if (SDL_GetTicks() < next_ticks) {
         return;
     }
 

@@ -8,6 +8,7 @@
 
 #ifndef _WIN32
 #include <dirent.h>
+#include <sys/stat.h>
 
 #include <fpattern/fpattern.h>
 #endif
@@ -90,10 +91,35 @@ bool tig_find_next_file(TigFindFileData* find_file_data)
         return false;
     }
 
+#ifdef _WIN32
     compat_join_path(path, sizeof(path), priv->dir, priv->entries[priv->index]);
-    if (!SDL_GetPathInfo(COMPAT_SDL_PATH(path), &(find_file_data->path_info))) {
+    if (!SDL_GetPathInfo(path, &(find_file_data->path_info))) {
         return false;
     }
+#else
+    // CE: Use `stat` directly and skip entries that cannot be queried instead
+    // of terminating enumeration (which made the rest of the folder invisible).
+    for (;;) {
+        struct stat st;
+
+        compat_join_path(path, sizeof(path), priv->dir, priv->entries[priv->index]);
+        if (stat(path, &st) == 0) {
+            find_file_data->path_info.type = S_ISDIR(st.st_mode)
+                ? SDL_PATHTYPE_DIRECTORY
+                : (S_ISREG(st.st_mode) ? SDL_PATHTYPE_FILE : SDL_PATHTYPE_OTHER);
+            find_file_data->path_info.size = (Uint64)st.st_size;
+            find_file_data->path_info.modify_time = SDL_SECONDS_TO_NS(st.st_mtime);
+            find_file_data->path_info.create_time = SDL_SECONDS_TO_NS(st.st_ctime);
+            find_file_data->path_info.access_time = SDL_SECONDS_TO_NS(st.st_atime);
+            break;
+        }
+
+        priv->index++;
+        if (priv->index >= priv->count) {
+            return false;
+        }
+    }
+#endif
 
     strcpy(find_file_data->name, priv->entries[priv->index]);
     priv->index++;
