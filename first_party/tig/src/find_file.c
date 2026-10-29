@@ -46,7 +46,13 @@ bool tig_find_first_file(const char* pattern, TigFindFileData* find_file_data)
     }
 
     entries = SDL_GlobDirectory(dir, fname, SDL_GLOB_CASEINSENSITIVE, &count);
-    if (count == 0) {
+    if (entries == NULL || count == 0) {
+#if SDL_PLATFORM_IOS
+        if (SDL_strchr(fname, '*') != NULL || SDL_strchr(fname, '?') != NULL) {
+            SDL_Log("TIG FindFile: no match for \"%s\" in \"%s\" (%s)", fname, dir, entries == NULL ? SDL_GetError() : "empty");
+        }
+#endif
+        SDL_free(entries);
         return false;
     }
 

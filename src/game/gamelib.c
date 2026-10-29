@@ -1828,6 +1828,20 @@ void gamelib_load_data(void)
         tig_file_repository_add(file_list.entries[index].path);
     }
 
+    // CE: Directory listing may fail on some platforms (seen on iOS), fall back
+    // to well-known database names.
+    if (file_list.count == 0) {
+        char name[16];
+
+        tig_debug_printf("gamelib_load_data: arcanum*.dat not found by pattern, trying explicit names\n");
+        for (index = 1; index <= 9; index++) {
+            snprintf(name, sizeof(name), "arcanum%u.dat", index);
+            if (SDL_GetPathInfo(name, NULL)) {
+                tig_file_repository_add(name);
+            }
+        }
+    }
+
     tig_file_list_destroy(&file_list);
 
     tig_file_mkdir("data");
