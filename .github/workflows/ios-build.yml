@@ -13,7 +13,7 @@ defaults:
 jobs:
   ios:
     name: iOS
-    runs-on: macos-15
+    runs-on: macos-latest
 
     steps:
       - name: Clone
@@ -23,7 +23,7 @@ jobs:
         uses: actions/cache@v5
         with:
           path: out/build/ios
-          key: ios-cmake-macos15-v1
+          key: ios-cmake-macos-latest-v1
 
       - name: Configure
         run: cmake --preset ios
