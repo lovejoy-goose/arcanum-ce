@@ -42,6 +42,8 @@ static int tig_message_text_buffer_index;
 // - drag: left button held while moving (inventory drag & drop)
 // - long press: right click (held until finger is lifted)
 // - two-finger tap: right click
+// - three-finger tap: Escape (game menu with save/load)
+// - four-finger tap: F7 (quick save)
 
 // Hold duration (in milliseconds) that turns a touch into a right click.
 #define TOUCH_LONG_PRESS_MS 450
@@ -55,6 +57,7 @@ static void tig_message_touch_ping(void);
 static bool tig_message_touch_active;
 static SDL_FingerID tig_message_touch_finger;
 static int tig_message_touch_finger_count;
+static int tig_message_touch_max_finger_count;
 static bool tig_message_touch_dragging;
 static bool tig_message_touch_long_pressed;
 static bool tig_message_touch_consumed;
@@ -253,6 +256,12 @@ static const char* tig_message_text_to_ansi(const char* utf8)
 }
 
 #if SDL_PLATFORM_IOS || SDL_PLATFORM_ANDROID
+static void tig_message_touch_press_key(SDL_Keycode key, SDL_Scancode scancode)
+{
+    tig_kb_set_key(key, scancode, true);
+    tig_kb_set_key(key, scancode, false);
+}
+
 static void tig_message_touch_handle_event(const SDL_Event* event)
 {
     int x = (int)event->tfinger.x;
@@ -264,9 +273,10 @@ static void tig_message_touch_handle_event(const SDL_Event* event)
     case SDL_EVENT_FINGER_DOWN:
         tig_message_touch_finger_count++;
 
-        if (!tig_message_touch_active) {
+        if (!tig_message_touch_active && tig_message_touch_finger_count == 1) {
             tig_message_touch_active = true;
             tig_message_touch_finger = event->tfinger.fingerID;
+            tig_message_touch_max_finger_count = 1;
             tig_message_touch_dragging = false;
             tig_message_touch_long_pressed = false;
             tig_message_touch_consumed = false;
@@ -275,14 +285,15 @@ static void tig_message_touch_handle_event(const SDL_Event* event)
             tig_message_touch_down_y = event->tfinger.y;
             tig_set_active(true);
             tig_mouse_set_position(x, y);
-        } else if (!tig_message_touch_dragging
-            && !tig_message_touch_long_pressed
-            && !tig_message_touch_consumed) {
-            // Second finger while the first one is resting - right click at
-            // the first finger's position.
-            tig_mouse_set_button(TIG_MOUSE_BUTTON_RIGHT, true);
-            tig_mouse_set_button(TIG_MOUSE_BUTTON_RIGHT, false);
-            tig_message_touch_consumed = true;
+        } else if (tig_message_touch_active) {
+            if (tig_message_touch_finger_count > tig_message_touch_max_finger_count) {
+                tig_message_touch_max_finger_count = tig_message_touch_finger_count;
+            }
+
+            // Multi-finger gesture, resolved when all fingers are lifted.
+            if (!tig_message_touch_dragging && !tig_message_touch_long_pressed) {
+                tig_message_touch_consumed = true;
+            }
         }
         break;
     case SDL_EVENT_FINGER_MOTION:
@@ -305,7 +316,9 @@ static void tig_message_touch_handle_event(const SDL_Event* event)
             tig_mouse_set_button(TIG_MOUSE_BUTTON_LEFT, true);
         }
 
-        tig_mouse_set_position(x, y);
+        if (!tig_message_touch_consumed) {
+            tig_mouse_set_position(x, y);
+        }
         break;
     case SDL_EVENT_FINGER_UP:
     case SDL_EVENT_FINGER_CANCELED:
@@ -313,17 +326,42 @@ static void tig_message_touch_handle_event(const SDL_Event* event)
             tig_message_touch_finger_count--;
         }
 
-        if (!tig_message_touch_active || event->tfinger.fingerID != tig_message_touch_finger) {
+        if (!tig_message_touch_active) {
             break;
         }
 
-        if (tig_message_touch_dragging) {
-            tig_mouse_set_button(TIG_MOUSE_BUTTON_LEFT, false);
-        } else if (tig_message_touch_long_pressed) {
-            tig_mouse_set_button(TIG_MOUSE_BUTTON_RIGHT, false);
-        } else if (!tig_message_touch_consumed && event->type == SDL_EVENT_FINGER_UP) {
-            tig_mouse_set_button(TIG_MOUSE_BUTTON_LEFT, true);
-            tig_mouse_set_button(TIG_MOUSE_BUTTON_LEFT, false);
+        if (event->tfinger.fingerID == tig_message_touch_finger) {
+            // Primary finger lifted - finish its own action.
+            if (tig_message_touch_dragging) {
+                tig_mouse_set_button(TIG_MOUSE_BUTTON_LEFT, false);
+                tig_message_touch_dragging = false;
+            } else if (tig_message_touch_long_pressed) {
+                tig_mouse_set_button(TIG_MOUSE_BUTTON_RIGHT, false);
+                tig_message_touch_long_pressed = false;
+            } else if (!tig_message_touch_consumed && event->type == SDL_EVENT_FINGER_UP) {
+                tig_mouse_set_button(TIG_MOUSE_BUTTON_LEFT, true);
+                tig_mouse_set_button(TIG_MOUSE_BUTTON_LEFT, false);
+            }
+        }
+
+        if (tig_message_touch_finger_count > 0) {
+            break;
+        }
+
+        // All fingers lifted.
+        if (tig_message_touch_consumed && event->type == SDL_EVENT_FINGER_UP) {
+            switch (tig_message_touch_max_finger_count) {
+            case 2:
+                tig_mouse_set_button(TIG_MOUSE_BUTTON_RIGHT, true);
+                tig_mouse_set_button(TIG_MOUSE_BUTTON_RIGHT, false);
+                break;
+            case 3:
+                tig_message_touch_press_key(SDLK_ESCAPE, SDL_SCANCODE_ESCAPE);
+                break;
+            case 4:
+                tig_message_touch_press_key(SDLK_F7, SDL_SCANCODE_F7);
+                break;
+            }
         }
 
         tig_message_touch_active = false;
